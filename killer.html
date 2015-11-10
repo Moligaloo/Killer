@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<title> 杀人游戏 5.0 </title>
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+	<!-- copied from http://v3.bootcss.com/getting-started/ -->
+	<link rel="stylesheet" href="https://cdn.bootcss.com/bootstrap/3.3.5/css/bootstrap.min.css">
+	<link rel="stylesheet" href="https://cdn.bootcss.com/bootstrap/3.3.5/css/bootstrap-theme.min.css">
+	<script src="https://cdn.bootcss.com/jquery/1.11.3/jquery.min.js"></script>
+	<script src="https://cdn.bootcss.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+	<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/1.0.2/Chart.min.js"></script>
+
+</head>
+<body>
+
+<style>
+	body {
+		margin: 20px;
+	}
+
+	.death{
+		text-decoration: line-through;
+		color: red;
+	}
+
+	#main{
+		visibility: hidden;
+	}
+
+	.good{
+		color: red;
+	}
+
+	.bad{
+		color: blue;
+	}
+
+</style>
+
+<script type="text/javascript">
+
+var nicknames = [];
+var chart = null;
+var players = [];
+var vote_table = [];
+var turn = 0;
+
+var role_map = {
+	'P': '警察',
+	'B': '蝴蝶',
+	'D': '医生',
+	'S': '狙击',
+	'C': '平民',
+	'K': '杀手',
+	'G': '秘匪',
+	'O': '老人'
+};
+
+function shuffle(array) {
+    var counter = array.length, temp, index;
+
+    // While there are elements in the array
+    while (counter > 0) {
+        // Pick a random index
+        index = Math.floor(Math.random() * counter);
+
+        // Decrease counter by 1
+        counter--;
+
+        // And swap the last element with it
+        temp = array[counter];
+        array[counter] = array[index];
+        array[index] = temp;
+    }
+
+    return array;
+}
+
+function create_role_list_from_string(string){
+	var roles = [];
+	for(var i=0; i<string.length; i++){
+		var role_char = string.substring(i, i+1);
+		var role = role_map[role_char];
+		if(role)
+			roles.push(role);
+	}
+
+	return roles;
+}
+
+var roles = {
+	"15": 'PP   B D S CCCCC    KKK  G O',
+	"16": 'PP   B D S CCCCCC   KKK  G O',
+	"17": 'PPP  B D S CCCCC    KKKK G O',
+	"18": 'PPP  B D S CCCCCC   KKKK  G O',
+	"19": 'PPP  B D S CCCCCCC  KKKK G O',
+	"20": 'PPPP B D S CCCCCC   KKKKK G O',
+	"21": 'PPPP B D S CCCCCCC  KKKKK G O',
+	"22": 'PPPP B D S CCCCCCCC KKKKK G O',
+};
+
+var role_names = ['警察','蝴蝶','医生','狙击','平民','杀手','秘匪','老人'];
+
+function create_shuffled_roles_from_length(length){
+	return shuffle(create_role_list_from_string(roles[length.toString()]));
+}
+
+function update_player_status(){
+	var role_map = {};
+	for(var i=0; i<role_names.length; i++){
+		role_map[role_names[i]] = 0;
+	}
+
+	for(var i=0; i<players.length; i++){
+		if(players[i].alive){
+			$('#alive' + i).text('存活');
+
+			var alive_role = players[i].role;
+			role_map[alive_role] = role_map[alive_role] + 1;
+		}else{
+			$('#alive' + i).text('死亡').parent().addClass('death');
+		}
+	}
+
+	$('#alive_roles').empty();
+
+	for(var i=0; i<role_names.length; i++){
+		if(i == 5){
+			$('#alive_roles').append($('<br>'));
+		}
+
+		var role = role_names[i];
+		if(role_map[role] > 0){
+			var role_node = $('<span>').text(role);
+			if(i < 5){
+				role_node.addClass('good');
+			}else{
+				role_node.addClass('bad');
+			}
+
+			$('#alive_roles').append(role_node).append($('<span>').text('x' + role_map[role] + ' '));
+		}
+	}
+}
+
+function start_game(){
+	if(nicknames.length == 0){
+		nicknames = [
+			"曹操","曹仁","夏侯渊", "张辽", "郭嘉",
+			"刘备", "关羽", "张飞", "诸葛亮", "赵云",
+			"孙权", "周瑜", "鲁肃", "吕蒙", "陆逊"
+		];
+	}
+
+	if(nicknames.length < 15 || nicknames.length > 22){
+		alert("玩家数目必须为 15~22！");
+		return;
+	}
+
+	$('#start').remove();
+	$('#main').css('visibility', 'visible');
+
+	var roles = create_shuffled_roles_from_length(nicknames.length);
+
+	for(var i=0; i<nicknames.length; i++){
+		var role = roles[i];
+		players.push({
+			nickname: nicknames[i],
+			alive: true,
+			role: role,
+			index: i
+		});
+
+		$('#player_status_table').append(
+			$('<tr>')
+				.append($('<td>').text(nicknames[i]))
+				.append($('<td>').text(role))
+				.append($('<td>').attr('id', 'alive' + i))
+		);
+	}
+
+	update_player_status();
+
+	for(var i=0; i<players.length; i++){
+		vote_table.push(-1);
+	}
+
+	var voter_list = $('#voter_list');
+	for(var i=0; i<players.length; i++){
+		var row = $('<tr>');
+
+		row.append($('<td>').text(players[i].nickname));
+		row.append($('<td>').append(create_selector(i)));
+
+		voter_list.append(row);
+	}
+
+	var zero_values = [];
+	for(var i=0; i<players.length; i++){
+		zero_values.push(0);
+	}
+
+	var data = {
+	    labels: nicknames,
+	    datasets: [
+	        {
+	            label: "",
+	            fillColor: "rgba(220,220,220,0.5)",
+	            strokeColor: "rgba(220,220,220,0.8)",
+	            highlightFill: "rgba(220,220,220,0.75)",
+	            highlightStroke: "rgba(220,220,220,1)",
+	            data: zero_values,
+	        }
+	    ]
+	};
+
+	var ctx = document.getElementById("vote-result").getContext("2d");
+	chart = new Chart(ctx).Bar(data);
+}
+
+function clear_vote_table(){
+	for(var i=0; i<vote_table.length; i++){
+		vote_table[i] = -1;
+		$('#vote' + i).text('未投票');
+	}
+
+	update_vote_result();
+}
+
+function voter_name_node_from_index(index){
+	return $('<b>').text(nicknames[index]);
+}
+
+function voter_names_from_array(array){
+	var container = $('<span>');
+
+	container.append(voter_name_node_from_index(array[0]));
+
+	for(var i=1; i<array.length; i++){
+		container.append($('<span>').text(','));
+		container.append(voter_name_node_from_index(array[i]));
+	}
+
+	return container;
+}
+
+function vote_result_node(){
+	var player2voters = [];
+	for(var i=0; i<vote_table.length; i++){
+		player2voters.push([]);
+	}
+
+	for(var i=0; i<vote_table.length; i++){
+		var voter = i;
+		var votee = vote_table[i];
+
+		if(votee == -1)
+			continue;
+
+		player2voters[votee].push(voter);
+	}
+
+	var ul = $('<ul>');
+	for(var i=0; i<player2voters.length; i++){
+		var votee = i;
+		var voters = player2voters[i];
+
+		if(voters.length >= 1){
+			var li = $('<li>');
+
+			li.append(voter_names_from_array(voters));
+			li.append($('<span>').text('投了'));
+			li.append(voter_name_node_from_index(votee));
+
+			ul.append(li);
+		}
+	}
+
+	return ul;
+}
+
+function save_history(to_kill){
+	turn++;
+
+	$('#history')
+		.append(
+			$('<tr>')
+				.append($('<td>').text(turn))
+				.append($('<td>').append(vote_result_node()))
+				.append($('<td>').append($('<b>').text(to_kill.nickname)))
+		);
+}
+
+function vote(voter_id, votee_id){
+	vote_table[voter_id] = votee_id;
+	if(votee_id >= 0){
+		$('#vote' + voter_id).text(players[votee_id].nickname);
+	}else{
+		$('#vote' + voter_id).text('弃权');
+	}
+
+	update_vote_result();
+}
+
+function update_vote_result(){
+	var values = [];
+	for(var i=0; i<players.length; i++){
+		values.push(0);
+	}
+
+	for(var i=0; i<vote_table.length; i++){
+		var voter_id = i;
+		var votee_id = vote_table[i];
+		if(votee_id >= 0)
+			values[votee_id]++;
+	}
+
+	var highest_value = Math.max.apply(null, values);
+
+	var to_kill_list = [];
+	if(highest_value > 0){
+		for(var i=0; i<players.length; i++){
+			if(values[i] == highest_value){
+				to_kill_list.push(players[i]);
+			}
+		}
+	}
+
+	$('#buttons').empty();
+	if(to_kill_list.length > 0){
+		if(to_kill_list.length == 1){
+			var to_kill = to_kill_list[0]; 
+
+			$('#buttons')
+				.append(
+					$('<button>')
+						.addClass('btn')
+						.addClass('btn-danger')
+						.text('处决' + to_kill.nickname)
+						.click(function(){
+							to_kill.alive = false;
+							save_history(to_kill);
+							update_player_status();
+							clear_vote_table();
+
+							console.log($('#vote' + to_kill.index).parent().parent().parent().fadeOut());
+						})
+				);
+		}else{
+			$('#buttons').append($('<b>').text("PK:"));
+			for(var i=0; i<to_kill_list.length; i++){
+				$('#buttons')
+					.append($('<span>').text(to_kill_list[i].nickname))
+					.append($('<span>').text(','));
+			}
+		}
+	}
+
+	var bars = chart.datasets[0].bars;
+	for(var i=0; i<values.length; i++){
+		bars[i].value = values[i];
+	}
+	chart.update();
+}
+
+function create_selector(voter_id){
+	var selector = 
+		$('<div>')
+		.addClass('dropdown')
+		.append(
+			$('<button>')
+				.addClass('btn')
+				.addClass('btn-default')
+				.addClass('dropdown-toggle')
+				.attr('data-toggle', 'dropdown')
+				.text('未投票')
+				.attr('id', 'vote' + voter_id)
+		);
+
+	var ul = $('<ul>').addClass('dropdown-menu');
+	for(var i=0; i<=players.length; i++){
+		var li = $('<li>');
+		var a = $('<a>');
+
+		a.attr('index', i);
+
+		if(i == players.length){
+			a.text('弃权').click(function(){
+				vote(voter_id, -1);
+			});
+		}else{
+			a.text(players[i].nickname).click(function(event){
+				var link = $(event.target);
+				vote(voter_id, link.attr('index'));
+			});
+		}
+
+		li.append(a);
+		ul.append(li);
+	}
+
+	selector.append(ul);
+
+	return selector;
+}
+
+function add_nickname(){
+	var nickname = $('#nickname').val();
+	nicknames.push(nickname);
+	$('#nickname_table_body').append(
+		$('<tr>')
+			.append($('<td>').text(nicknames.length))
+			.append($('<td>').text(nickname))
+	);
+	$('#nickname').val('');
+}
+
+</script>
+
+<h1 class='text-center'> 杀人游戏 5.0 法官客户端 </h1>
+
+<div id='start'> 
+
+<center>
+
+<form class="form-inline">
+  <div class="form-group">
+    <div class="input-group">
+      <div class="input-group-addon"> 请输入玩家昵称 </div>
+      <input type="text" class="form-control" id="nickname" placeholder="昵称">
+    </div>
+  </div>
+  <button type="button" class="btn btn-primary" onclick="add_nickname()"> 添加 </button>
+</form>
+
+<h2>已添加的玩家:</h2>
+
+<div class='row'>
+<div class='col-md-4 col-md-offset-4'>
+<table class='table table-striped'>
+	<thead>
+		<tr>
+			<th> # </th>
+			<th> 昵称 </th>
+		</tr>
+	</thead>
+
+	<tbody id='nickname_table_body'>
+	</tbody>
+</table>
+</div>
+</div>
+
+<button class='btn btn-lg btn-success' onclick='start_game()'> 开始游戏 </button>
+
+</center>
+
+</div>
+
+<div id='main'>
+
+<div class='row'>
+	<div class='col-md-12'>
+		<div class='panel panel-default'>
+			<div class='panel-heading'> 投票结果 </div>
+			<div class='panel-body'>
+				<canvas id='vote-result' width='1000'></canvas>
+				<br/>
+				<div id='buttons'></div> 
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class='row'>
+	<div class='col-md-4'>
+		<div class='panel panel-default'>
+			<div class='panel-heading'> 玩家状态 </div>
+			<table class='table table-bordered'>
+				<thead>
+					<tr>
+						<td id='alive_roles' colspan="3">
+						</td>
+					</tr>
+					<tr>
+						<th> 昵称 </th>
+						<th> 身份 </th>
+						<th> 状态 </th>
+					</tr>
+				</thead>
+				<tbody id='player_status_table'>
+				</tbody>
+			</table>
+		</div>
+	</div>
+
+	<div class='col-md-4'>
+		<div class='panel panel-default'>
+			<div class='panel-heading'> 投票 </div>
+			<table class='table table-bordered'>
+				<thead>
+					<tr>
+						<th> 投票者 </th>
+						<th> 被投者 </th>
+					</tr>
+				</thead>
+				<tbody id='voter_list'>
+				</tbody>
+			</table>
+		</div>
+	</div>
+
+	<div class='col-md-4'>
+		<div class='panel panel-default'>
+			<div class='panel-heading'> 历史记录 </div>
+			<table class='table table-striped table-bordered'>
+				<thead>
+					<tr>
+						<th> 回合数 </th>
+						<th> 投票详情 </th>
+						<th> 被处决 </th>
+					</tr>
+				</thead>
+				<tbody id='history'>
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>
+
+</div>
+
+</body>
+</html>

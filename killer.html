@@ -345,7 +345,7 @@ function update_vote_result(){
 							update_player_status();
 							clear_vote_table();
 
-							console.log($('#vote' + to_kill.index).parent().parent().parent().fadeOut());
+							$('#vote' + to_kill.index).parent().parent().parent().fadeOut();
 						})
 				);
 		}else{

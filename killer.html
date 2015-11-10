@@ -281,7 +281,17 @@ function vote_result_node(){
 	return ul;
 }
 
-function save_history(to_kill){
+function node_from_vote_result(result){
+	var node = voter_names_from_array(result);
+	if(result.length == 1)
+		node.append($('<span>').text('被处决'));
+	else
+		node.append($('<span>').text('进入 PK'));
+
+	return node;
+}
+
+function save_history(result){
 	turn++;
 
 	$('#history')
@@ -289,7 +299,7 @@ function save_history(to_kill){
 			$('<tr>')
 				.append($('<td>').text(turn))
 				.append($('<td>').append(vote_result_node()))
-				.append($('<td>').append($('<b>').text(to_kill.nickname)))
+				.append($('<td>').append(node_from_vote_result(result)))
 		);
 }
 
@@ -323,7 +333,7 @@ function update_vote_result(){
 	if(highest_value > 0){
 		for(var i=0; i<players.length; i++){
 			if(values[i] == highest_value){
-				to_kill_list.push(players[i]);
+				to_kill_list.push(i);
 			}
 		}
 	}
@@ -331,30 +341,37 @@ function update_vote_result(){
 	$('#buttons').empty();
 	if(to_kill_list.length > 0){
 		if(to_kill_list.length == 1){
-			var to_kill = to_kill_list[0]; 
+			var to_kill_player = players[to_kill_list[0]];
 
 			$('#buttons')
 				.append(
 					$('<button>')
 						.addClass('btn')
 						.addClass('btn-danger')
-						.text('处决' + to_kill.nickname)
+						.text('处决' + to_kill_player.nickname)
 						.click(function(){
-							to_kill.alive = false;
-							save_history(to_kill);
+							to_kill_player.alive = false;
+							save_history(to_kill_list);
 							update_player_status();
 							clear_vote_table();
 
-							$('#vote' + to_kill.index).parent().parent().parent().fadeOut();
+							$('#vote' + to_kill_player.index).parent().parent().parent().fadeOut();
 						})
 				);
 		}else{
-			$('#buttons').append($('<b>').text("PK:"));
-			for(var i=0; i<to_kill_list.length; i++){
-				$('#buttons')
-					.append($('<span>').text(to_kill_list[i].nickname))
-					.append($('<span>').text(','));
-			}
+			$('#buttons')
+				.append($('<span>').text("以下角色进入 PK 环节:"))
+				.append(voter_names_from_array(to_kill_list))
+				.append(
+					$('<button>')
+						.text('进行 PK')
+						.addClass('btn')
+						.addClass('btn-danger')
+						.click(function(){
+							save_history(to_kill_list);
+							clear_vote_table();
+						})
+				);
 		}
 	}
 
@@ -520,7 +537,7 @@ function add_nickname(){
 					<tr>
 						<th> 回合数 </th>
 						<th> 投票详情 </th>
-						<th> 被处决 </th>
+						<th> 结果 </th>
 					</tr>
 				</thead>
 				<tbody id='history'>

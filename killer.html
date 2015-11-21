@@ -11,6 +11,7 @@
 	<script src="https://cdn.bootcss.com/jquery/1.11.3/jquery.min.js"></script>
 	<script src="https://cdn.bootcss.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
 	<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/1.0.2/Chart.min.js"></script>
+	<script src="https://cdn.bootcss.com/bootbox.js/4.4.0/bootbox.min.js"></script>
 
 </head>
 <body>
@@ -175,9 +176,33 @@ function start_game(){
 
 		$('#player_status_table').append(
 			$('<tr>')
+				.attr('data-player-index', i)
 				.append($('<td>').text(nicknames[i]))
 				.append($('<td>').text(role))
 				.append($('<td>').attr('id', 'alive' + i))
+				.append($('<td>').append($('<button>').text('点杀').addClass('btn btn-danger').click(function(event){
+					var row = $(event.target).parent().parent();
+					var nickname = row.children().first().text();
+					bootbox.prompt("请输入处决" + nickname + "的理由", function(result) {                
+					  if (result === null) {  
+
+					  } else {
+					  	var to_kill_player = players[row.attr('data-player-index')];
+					  	to_kill_player.alive = false;
+						update_player_status();
+						$('#vote' + to_kill_player.index).parent().parent().parent().fadeOut();
+
+						$('#comment_row')
+							.before(
+								$('<tr>').append(
+									$('<td>')
+										.attr('colspan', 3)
+										.text(to_kill_player.nickname + '被法官点杀, 理由是' + result)
+								)
+							);
+					  }
+					});
+				})))
 		);
 	}
 
